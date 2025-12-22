@@ -160,7 +160,7 @@
     {
       "ID": 1000,
       "Entries": [
-        "26: Warrior Male\r"
+        "26: Warrior Male (Default)\r"
       ]
     },
     {
@@ -220,7 +220,7 @@
     {
       "ID": 2000,
       "Entries": [
-        "36: Warrior Female\r"
+        "36: Warrior Female (Default)\r"
       ]
     },
     {
@@ -277,124 +277,124 @@
         "45: Numen Female\r"
       ]
     },
-    {
+        {
       "ID": 3100,
       "Entries": [
-        "46: Warrior Male\r"
+        "46: Warrior Male (Vagabond)\r"
       ]
     },
     {
       "ID": 3101,
       "Entries": [
-        "47: Warrior Female\r"
+        "47: Warrior Female (Vagabond)\r"
       ]
     },
     {
       "ID": 3102,
       "Entries": [
-        "48: Warrior Male\r"
+        "48: Warrior Male (Warrior)\r"
       ]
     },
     {
       "ID": 3103,
       "Entries": [
-        "49: Warrior Female\r"
+        "49: Warrior Female (Warrior)\r"
       ]
     },
     {
       "ID": 3104,
       "Entries": [
-        "50: Warrior Male\r"
+        "50: Warrior Male (Hero)\r"
       ]
     },
     {
       "ID": 3105,
       "Entries": [
-        "51: Warrior Female\r"
+        "51: Warrior Female (Hero)\r"
       ]
     },
     {
       "ID": 3106,
       "Entries": [
-        "52: Warrior Male\r"
+        "52: Warrior Male (Bandit)\r"
       ]
     },
     {
       "ID": 3107,
       "Entries": [
-        "53: Warrior Female\r"
+        "53: Warrior Female (Bandit)\r"
       ]
     },
     {
       "ID": 3108,
       "Entries": [
-        "54: Warrior Male\r"
+        "54: Warrior Male (Astrologer)\r"
       ]
     },
     {
       "ID": 3109,
       "Entries": [
-        "55: Warrior Female\r"
+        "55: Warrior Female (Astrologer)\r"
       ]
     },
     {
       "ID": 3110,
       "Entries": [
-        "56: Warrior Male\r"
+        "56: Warrior Male (Prophet)\r"
       ]
     },
     {
       "ID": 3111,
       "Entries": [
-        "57: Warrior Female\r"
+        "57: Warrior Female (Prophet)\r"
       ]
     },
     {
       "ID": 3112,
       "Entries": [
-        "58: Warrior Male\r"
+        "58: Warrior Male (Confessor)\r"
       ]
     },
     {
       "ID": 3113,
       "Entries": [
-        "59: Warrior Female\r"
+        "59: Warrior Female (Confessor)\r"
       ]
     },
     {
       "ID": 3114,
       "Entries": [
-        "60: Warrior Male\r"
+        "60: Warrior Male (Samurai)\r"
       ]
     },
     {
       "ID": 3115,
       "Entries": [
-        "61: Warrior Female\r"
+        "61: Warrior Female (Samurai)\r"
       ]
     },
     {
       "ID": 3116,
       "Entries": [
-        "62: Warrior Male\r"
+        "62: Warrior Male (Prisoner)\r"
       ]
     },
     {
       "ID": 3117,
       "Entries": [
-        "63: Warrior Female\r"
+        "63: Warrior Female (Prisoner)\r"
       ]
     },
     {
       "ID": 3118,
       "Entries": [
-        "64: Warrior Male\r"
+        "64: Warrior Male (Wretch)\r"
       ]
     },
     {
       "ID": 3119,
       "Entries": [
-        "65: Warrior Female\r"
+        "65: Warrior Female (Wretch)\r"
       ]
     },
     {
