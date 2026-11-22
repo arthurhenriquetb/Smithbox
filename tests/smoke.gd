@@ -24,6 +24,18 @@ func run_test() -> void:
 	assert(skin.mesh.get_surface_count() == 1)
 	scene.Shape.recolor(first_box,[Color.RED,Color.BLUE,Color.WHITE,Color.BLACK,Color.GRAY,Color.GREEN])
 	assert((skin.mesh as ArrayMesh).surface_get_arrays(0)[Mesh.ARRAY_COLOR].size() == 36)
+	var before_line: int = scene.pieces.size()
+	scene.place_wall_line(Vector2(1.5,7.0),Vector2(4.5,7.0),false)
+	assert(scene.pieces.size() == before_line+4)
+	scene.undo_edit()
+	assert(scene.pieces.size() == before_line)
+	scene.redo_edit()
+	assert(scene.pieces.size() == before_line+4)
+	scene.change_walls(true,true)
+	for item in scene.pieces:
+		if item.type == "wall": assert(item.raised)
+	scene.undo_edit()
+	assert(scene.find_piece(5).raised == false)
 	scene.cells["1:1"] = "dirt"
 	scene.rebuild_ground()
 	scene.save_project()

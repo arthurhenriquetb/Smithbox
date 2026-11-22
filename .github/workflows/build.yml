@@ -1,4 +1,4 @@
-name: Build Android and Windows
+name: Build Windows
 
 on:
   push:
@@ -32,6 +32,7 @@ jobs:
           path: build/windows/*
 
   android:
+    if: false # Paused at version 0.2 while Windows features are developed.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -72,8 +73,8 @@ jobs:
           path: build/android/*.apk
 
   preview_release:
-    name: Publish first downloadable preview
-    needs: [windows, android]
+    name: Publish Windows preview
+    needs: [windows]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -82,25 +83,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: CasaLivre-Android
-          path: dist/android
-      - uses: actions/download-artifact@v4
-        with:
           name: CasaLivre-Windows
           path: dist/windows
       - name: Package Windows program
         run: |
           cd dist/windows
           zip -9 ../CasaLivre-Windows.zip ./*
-      - name: Publish version 0.2 if not already present
+      - name: Publish Windows version 0.3 if not already present
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.2.0 >/dev/null 2>&1; then
-            echo 'Version 0.2 is already published.'
+          if gh release view v0.3.0 >/dev/null 2>&1; then
+            echo 'Version 0.3 is already published.'
           else
-            gh release create v0.2.0 dist/android/CasaLivre-debug.apk dist/CasaLivre-Windows.zip \
-              --title 'Casa Livre 0.2 — first-person preview' \
-              --notes 'First-person camera like Minecraft, WASD controls on PC, touch look and on-screen walking buttons on Android. Experimental debug-signed APK; intended for testing, not production. Builds are signed with a new debug key each time, so you may need to uninstall an earlier version before installation.' \
+            gh release create v0.3.0 dist/CasaLivre-Windows.zip \
+              --title 'Casa Livre 0.3 — Windows construction tools' \
+              --notes 'Windows-only preview. Build straight runs of 1 m walls with two clicks, use the central crosshair to target windows and doors, and undo/redo edits with Ctrl+Z / Ctrl+Y. Android builds are paused at version 0.2.' \
               --prerelease
           fi

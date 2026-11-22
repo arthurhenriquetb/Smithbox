@@ -33,6 +33,10 @@ var furniture_depth := 0.7
 var furniture_height := 0.85
 var roof_pitch := 25.0
 var roof_first_corner := Vector2i(-1, -1)
+var wall_placement := "Single"
+var wall_line_start := Vector2(-999,-999)
+var undo_stack: Array[String] = []
+var redo_stack: Array[String] = []
 var live := false
 var camera_yaw := deg_to_rad(40.0)
 var camera_pitch := deg_to_rad(-22.0)
@@ -231,6 +235,8 @@ func add_perimeter() -> void:
 
 func enter_game() -> void:
 	live = true
+	undo_stack.clear()
+	redo_stack.clear()
 	if is_instance_valid(setup_ui):
 		setup_ui.get_parent().queue_free()
 	player_position = Vector3(settings.width/2.0,1.7,settings.depth/2.0)
@@ -391,7 +397,7 @@ func create_game_ui() -> void:
 	margin.add_child(v)
 	ui_label(v, "CASA LIVRE", 19)
 	ui_label(v, "Tool", 12)
-	ui_option(v, ["Terrain", "Walls", "Openings", "Roof", "Furniture", "Paint"], mode, func(value): mode=value; refresh_tool_options())
+	ui_option(v, ["Terrain", "Walls", "Openings", "Roof", "Furniture", "Paint"], mode, func(value): mode=value; wall_line_start=Vector2(-999,-999); refresh_tool_options())
 	tools_content = VBoxContainer.new()
 	tools_content.add_theme_constant_override("separation", 5)
 	v.add_child(tools_content)
@@ -408,6 +414,8 @@ func create_game_ui() -> void:
 	bottom.alignment = BoxContainer.ALIGNMENT_END
 	game_ui.add_child(bottom)
 	ui_button(bottom, "Rotate", rotate_piece)
+	ui_button(bottom, "Undo", undo_edit)
+	ui_button(bottom, "Redo", redo_edit)
 	ui_button(bottom, "Lower all", func(): change_walls(false, true))
 	ui_button(bottom, "Raise all", func(): change_walls(true, true))
 	ui_button(bottom, "Delete", delete_aimed)
@@ -475,6 +483,10 @@ func refresh_tool_options() -> void:
 			ui_color(tools_content,paint_color,func(c): paint_color=c)
 		"Walls":
 			ui_label(tools_content, "Place 1 m wall courses", 12)
+			ui_option(tools_content, ["Single", "Line"], wall_placement, func(v): wall_placement=v; wall_line_start=Vector2(-999,-999); refresh_tool_options())
+			if wall_placement == "Line":
+				ui_label(tools_content, "Click start, then end", 12)
+				ui_button(tools_content, "Cancel line", func(): wall_line_start=Vector2(-999,-999))
 			ui_label(tools_content, "Rotate to change direction", 12)
 			ui_color(tools_content, item_color, func(c): item_color=c)
 			ui_button(tools_content, "Raise aimed wall", func(): change_walls(true,false))
@@ -571,7 +583,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		camera_pitch = clampf(camera_pitch-event.relative.y*0.006,-1.45,1.45)
 		update_camera()
 	elif event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode == KEY_R:
+		if event.ctrl_pressed and event.keycode == KEY_Z:
+			if event.shift_pressed: redo_edit()
+			else: undo_edit()
+		elif event.ctrl_pressed and event.keycode == KEY_Y:
+			redo_edit()
+		elif event.keycode == KEY_R:
 			rotate_piece()
 		elif event.keycode == KEY_DELETE or event.keycode == KEY_BACKSPACE:
 			delete_aimed()
@@ -600,9 +617,11 @@ func update_preview() -> void:
 		return
 	if mode == "Walls":
 		var q := wall_snap(p)
-		ghost.position = Vector3(q.x,0.16,q.y)
+		var origin := q if wall_placement != "Line" or wall_line_start.x < -900 else wall_line_start
+		ghost.position = Vector3(origin.x if wall_turned else (origin.x+q.x)/2.0,0.16,(origin.y+q.y)/2.0 if wall_turned else origin.y)
 		ghost.rotation.y = PI/2 if wall_turned else 0
-		(ghost.mesh as BoxMesh).size = Vector3(1,0.32,0.17)
+		var extent := absf(origin.y-q.y)+1 if wall_turned else absf(origin.x-q.x)+1
+		(ghost.mesh as BoxMesh).size = Vector3(extent,0.32,0.17)
 	elif mode == "Roof":
 		ghost.position = Vector3(floorf(p.x)+0.5,0.14,floorf(p.z)+0.5)
 		ghost.rotation.y = 0
@@ -612,7 +631,8 @@ func update_preview() -> void:
 		ghost.rotation.y = 0
 		(ghost.mesh as BoxMesh).size = Vector3(1,0.12,1)
 	if is_instance_valid(hint_label):
-		hint_label.text = "X %d m  |  Z %d m\n%s" % [int(p.x),int(p.z),mode]
+		var suffix := " (choose end)" if mode == "Walls" and wall_placement == "Line" and wall_line_start.x > -900 else ""
+		hint_label.text = "X %d m  |  Z %d m\n%s%s" % [int(p.x),int(p.z),mode,suffix]
 
 
 func wall_snap(p: Vector3) -> Vector2:
@@ -621,11 +641,86 @@ func wall_snap(p: Vector3) -> Vector2:
 	return Vector2(floorf(p.x)+0.5,roundf(p.z))
 
 
+func snapshot() -> String:
+	return JSON.stringify({"pieces":pieces,"cells":cells,"next_id":next_id})
+
+
+func record_edit() -> void:
+	undo_stack.append(snapshot())
+	if undo_stack.size() > 60:
+		undo_stack.pop_front()
+	redo_stack.clear()
+
+
+func restore_snapshot(serialized: String) -> void:
+	var data = JSON.parse_string(serialized)
+	if not data is Dictionary:
+		return
+	pieces.clear()
+	for info in data.get("pieces",[]):
+		if info is Dictionary:
+			pieces.append(info)
+	cells = data.get("cells",{})
+	next_id = int(data.get("next_id",1))
+	wall_line_start = Vector2(-999,-999)
+	rebuild_ground()
+	redraw_pieces()
+
+
+func undo_edit() -> void:
+	if undo_stack.is_empty(): return
+	redo_stack.append(snapshot())
+	restore_snapshot(undo_stack.pop_back())
+
+
+func redo_edit() -> void:
+	if redo_stack.is_empty(): return
+	undo_stack.append(snapshot())
+	restore_snapshot(redo_stack.pop_back())
+
+
+func wall_exists(pos: Vector2, turned: bool) -> bool:
+	for other in pieces:
+		if other.type == "wall" and absf(float(other.x)-pos.x)<0.05 and absf(float(other.z)-pos.y)<0.05 and bool(other.turn) == turned:
+			return true
+	return false
+
+
+func add_wall_at(pos: Vector2, turned: bool, track_undo: bool = true) -> void:
+	if wall_exists(pos,turned): return
+	if turned and (pos.x<0 or pos.x>settings.width or pos.y<0.5 or pos.y>=settings.depth): return
+	if not turned and (pos.y<0 or pos.y>settings.depth or pos.x<0.5 or pos.x>=settings.width): return
+	add_piece({"type":"wall","x":pos.x,"z":pos.y,"turn":turned,"raised":false,"opening":"none","color":item_color.to_html()},track_undo)
+
+
+func place_wall_line(start: Vector2, finish: Vector2, turned: bool) -> void:
+	var positions: Array[Vector2] = []
+	if turned:
+		var first := mini(int(floorf(start.y)),int(floorf(finish.y)))
+		var last := maxi(int(floorf(start.y)),int(floorf(finish.y)))
+		for n in range(first,last+1):
+			var pos := Vector2(start.x,n+0.5)
+			if not wall_exists(pos,true): positions.append(pos)
+	else:
+		var first := mini(int(floorf(start.x)),int(floorf(finish.x)))
+		var last := maxi(int(floorf(start.x)),int(floorf(finish.x)))
+		for n in range(first,last+1):
+			var pos := Vector2(n+0.5,start.y)
+			if not wall_exists(pos,false): positions.append(pos)
+	if positions.is_empty(): return
+	record_edit()
+	for pos in positions:
+		add_wall_at(pos,turned,false)
+
+
 func place_aimed() -> void:
 	if not live:
 		return
 	if mode == "Paint":
 		paint_aimed(false)
+		return
+	if mode == "Openings":
+		place_opening_on_aimed_wall()
 		return
 	var p := aim_point()
 	if not within_lot(p):
@@ -637,24 +732,22 @@ func place_aimed() -> void:
 			if terrain_brush == "tree":
 				add_piece({"type":"tree", "x":x+0.5, "z":z+0.5,"color":"#598c52"})
 			else:
-				cells["%d:%d" % [x,z]] = paint_color.to_html() if terrain_brush == "custom" else terrain_brush
+				var key := "%d:%d" % [x,z]
+				var value := paint_color.to_html() if terrain_brush == "custom" else terrain_brush
+				if cells.get(key,settings.ground) == value: return
+				record_edit()
+				cells[key] = value
 				rebuild_ground()
 		"Walls":
 			var q := wall_snap(p)
-			for other in pieces:
-				if other.type == "wall" and absf(other.x-q.x)<0.05 and absf(other.z-q.y)<0.05 and other.turn == wall_turned:
-					return
-			add_piece({"type":"wall", "x":q.x,"z":q.y,"turn":wall_turned,"raised":false,"opening":"none","color":item_color.to_html()})
-		"Openings":
-			var wall := nearest_wall(p)
-			if wall.is_empty(): return
-			wall.opening = "none" if opening_type == "Remove opening" else opening_type.to_lower()
-			wall.window_width = window_width
-			wall.window_height = window_height
-			wall.window_sill = window_sill
-			wall.door_width = door_width
-			wall.door_height = door_height
-			redraw_pieces()
+			if wall_placement == "Line":
+				if wall_line_start.x < -900:
+					wall_line_start = q
+				else:
+					place_wall_line(wall_line_start,q,wall_turned)
+					wall_line_start = Vector2(-999,-999)
+			else:
+				add_wall_at(q,wall_turned)
 		"Roof":
 			var point := Vector2i(x,z)
 			if roof_first_corner.x == -1:
@@ -671,7 +764,22 @@ func place_aimed() -> void:
 			add_piece({"type":"furniture","kind":furniture_type,"x":x+0.5,"z":z+0.5,"w":furniture_width,"d":furniture_depth,"h":furniture_height,"turn":wall_turned,"color":item_color.to_html()})
 
 
-func add_piece(info: Dictionary) -> void:
+func place_opening_on_aimed_wall() -> void:
+	var wall := aimed_wall()
+	if wall.is_empty(): return
+	record_edit()
+	wall.opening = "none" if opening_type == "Remove opening" else opening_type.to_lower()
+	wall.window_width = window_width
+	wall.window_height = window_height
+	wall.window_sill = window_sill
+	wall.door_width = door_width
+	wall.door_height = door_height
+	redraw_pieces()
+
+
+func add_piece(info: Dictionary, track_undo: bool = true) -> void:
+	if track_undo:
+		record_edit()
 	info.id = next_id
 	info.faces = {}
 	next_id += 1
@@ -691,6 +799,15 @@ func nearest_wall(p: Vector3) -> Dictionary:
 	return best
 
 
+func aimed_wall() -> Dictionary:
+	var target := aimed_piece()
+	if not target.is_empty():
+		var selected := find_piece(int(target.id))
+		if selected.get("type","") == "wall":
+			return selected
+	return nearest_wall(aim_point())
+
+
 func find_piece(id: int) -> Dictionary:
 	for part in pieces:
 		if int(part.id) == id:
@@ -699,16 +816,20 @@ func find_piece(id: int) -> Dictionary:
 
 
 func change_walls(raise: bool, all_walls: bool) -> void:
-	var p := aim_point()
-	var nearest := nearest_wall(p)
+	var nearest := aimed_wall()
+	var affected := false
 	for piece in pieces:
-		if piece.type == "wall" and (all_walls or (not nearest.is_empty() and piece.id == nearest.id)):
+		if piece.type == "wall" and bool(piece.get("raised",false)) != raise and (all_walls or (not nearest.is_empty() and piece.id == nearest.id)):
+			if not affected:
+				record_edit()
+				affected = true
 			piece.raised = raise
-	redraw_pieces()
+	if affected: redraw_pieces()
 
 
 func rotate_piece() -> void:
 	wall_turned = not wall_turned
+	wall_line_start = Vector2(-999,-999)
 
 
 func delete_aimed() -> void:
@@ -720,6 +841,7 @@ func delete_aimed() -> void:
 	if id < 0: return
 	for n in range(pieces.size()-1,-1,-1):
 		if int(pieces[n].id) == id:
+			record_edit()
 			pieces.remove_at(n)
 			break
 	redraw_pieces()
@@ -743,6 +865,7 @@ func paint_aimed(whole: bool) -> void:
 	if target.is_empty(): return
 	var part := find_piece(target.id)
 	if part.is_empty(): return
+	record_edit()
 	if whole:
 		part.color = paint_color.to_html()
 		for other in target.body.get_parent().get_children():
