@@ -1,0 +1,13 @@
+# Godot generated state
+.godot/
+.import/
+*.tmp
+*.log
+*.apk
+*.aab
+*.exe
+*.pck
+
+# Local editor metadata
+.DS_Store
+Thumbs.db

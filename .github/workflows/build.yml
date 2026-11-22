@@ -1,0 +1,71 @@
+name: Build Android and Windows
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.2
+          use-dotnet: false
+          include-templates: true
+      - name: Import project
+        run: godot --headless --editor --quit
+      - name: Smoke test
+        run: godot --headless --script res://tests/smoke.gd
+      - name: Export Windows executable
+        run: |
+          mkdir -p build/windows
+          godot --headless --export-release "Windows Desktop" build/windows/CasaLivre.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CasaLivre-Windows
+          path: build/windows/*
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android tools
+        run: |
+          sdkmanager --install "platform-tools" "build-tools;35.0.1" "platforms;android-35"
+          yes | sdkmanager --licenses > /dev/null || true
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.7.2
+          use-dotnet: false
+          include-templates: true
+      - name: Import project
+        run: godot --headless --editor --quit
+      - name: Configure export paths
+        run: godot --headless --editor --script res://tests/configure_android.gd
+      - name: Create debug signing key
+        run: |
+          mkdir -p "$RUNNER_TEMP/casalivre-signing"
+          keytool -genkeypair -noprompt -keystore "$RUNNER_TEMP/casalivre-signing/debug.keystore" -alias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+      - name: Export installable debug APK
+        run: |
+          mkdir -p build/android
+          godot --headless --export-debug "Android" build/android/CasaLivre-debug.apk
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ runner.temp }}/casalivre-signing/debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CasaLivre-Android
+          path: build/android/*.apk
