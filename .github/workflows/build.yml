@@ -92,15 +92,15 @@ jobs:
         run: |
           cd dist/windows
           zip -9 ../CasaLivre-Windows.zip ./*
-      - name: Publish version 0.1 if not already present
+      - name: Publish version 0.2 if not already present
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view v0.1.0 >/dev/null 2>&1; then
-            echo 'Version 0.1 is already published.'
+          if gh release view v0.2.0 >/dev/null 2>&1; then
+            echo 'Version 0.2 is already published.'
           else
-            gh release create v0.1.0 dist/android/CasaLivre-debug.apk dist/CasaLivre-Windows.zip \
-              --title 'Casa Livre 0.1 — experimental preview' \
-              --notes 'First playable low-poly house planner for Android and Windows. Experimental debug-signed APK; intended for testing, not production. On Android you may need to allow installation from this source.' \
+            gh release create v0.2.0 dist/android/CasaLivre-debug.apk dist/CasaLivre-Windows.zip \
+              --title 'Casa Livre 0.2 — first-person preview' \
+              --notes 'First-person camera like Minecraft, WASD controls on PC, touch look and on-screen walking buttons on Android. Experimental debug-signed APK; intended for testing, not production. Builds are signed with a new debug key each time, so you may need to uninstall an earlier version before installation.' \
               --prerelease
           fi

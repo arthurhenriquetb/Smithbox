@@ -10,6 +10,8 @@ func run_test() -> void:
 	scene.start_from_setup()
 	await process_frame
 	assert(scene.live)
+	assert(absf(scene.camera.position.y-1.7)<0.001)
+	assert(scene.within_lot(scene.aim_point()))
 	assert(scene.terrain_mesh.mesh.get_surface_count() == 1)
 	scene.add_piece({"type":"wall", "x":3.5,"z":4.0,"turn":false,"raised":false,"opening":"window","window_width":0.7,"window_height":1.0,"window_sill":1.0,"color":"#cccccc"})
 	scene.add_piece({"type":"wall", "x":4.5,"z":4.0,"turn":false,"raised":true,"opening":"door","door_width":0.8,"door_height":2.1,"color":"#cccccc"})

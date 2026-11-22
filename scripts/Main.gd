@@ -35,9 +35,11 @@ var roof_pitch := 25.0
 var roof_first_corner := Vector2i(-1, -1)
 var live := false
 var camera_yaw := deg_to_rad(40.0)
-var camera_pitch := deg_to_rad(52.0)
-var camera_distance := 19.0
-var camera_target := Vector3.ZERO
+var camera_pitch := deg_to_rad(-22.0)
+var player_position := Vector3(9.0,1.7,8.0)
+var walk_speed := 4.0
+var mouse_look_locked := false
+var touch_movement := Vector2.ZERO
 var dragging := false
 var last_touch := Vector2.ZERO
 
@@ -231,8 +233,11 @@ func enter_game() -> void:
 	live = true
 	if is_instance_valid(setup_ui):
 		setup_ui.get_parent().queue_free()
-	camera_target = Vector3(settings.width/2.0, 0, settings.depth/2.0)
-	camera_distance = maxf(12, maxf(settings.width, settings.depth)*1.0)
+	player_position = Vector3(settings.width/2.0,1.7,settings.depth/2.0)
+	camera_yaw = 0
+	camera_pitch = deg_to_rad(-22.0)
+	mouse_look_locked = false
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	update_camera()
 	build_world()
 	create_game_ui()
@@ -415,12 +420,12 @@ func create_game_ui() -> void:
 	game_ui.add_child(nav)
 	var up_row := HBoxContainer.new()
 	nav.add_child(up_row)
-	ui_button(up_row,"↑",func(): move_camera(0,-2))
+	ui_movement_button(up_row,"↑",Vector2(0,-1))
 	var move_row := HBoxContainer.new()
 	nav.add_child(move_row)
-	ui_button(move_row,"←",func(): move_camera(-2,0))
-	ui_button(move_row,"↓",func(): move_camera(0,2))
-	ui_button(move_row,"→",func(): move_camera(2,0))
+	ui_movement_button(move_row,"←",Vector2(-1,0))
+	ui_movement_button(move_row,"↓",Vector2(0,1))
+	ui_movement_button(move_row,"→",Vector2(1,0))
 	var cross := Label.new()
 	cross.text = "+"
 	cross.add_theme_font_size_override("font_size", 25)
@@ -432,10 +437,28 @@ func create_game_ui() -> void:
 	cross.offset_bottom = 10
 	game_ui.add_child(cross)
 	var tip := Label.new()
-	tip.text = "Drag: orbit  •  WASD: move  •  wheel: zoom  •  click: place"
+	tip.text = "FIRST PERSON  •  WASD: walk  •  drag: look  •  Tab: mouse lock"
 	tip.add_theme_font_size_override("font_size", 12)
 	tip.position = Vector2(245,12)
 	game_ui.add_child(tip)
+	ui_button(v, "Lock/unlock mouse (Tab)",toggle_mouse_look)
+
+
+func ui_movement_button(parent: Node, caption: String, direction: Vector2) -> Button:
+	var b := ui_button(parent,caption,func(): pass)
+	b.custom_minimum_size.x = 41
+	b.button_down.connect(func(): touch_movement = direction)
+	b.button_up.connect(func():
+		if touch_movement == direction:
+			touch_movement = Vector2.ZERO
+	)
+	return b
+
+
+func toggle_mouse_look() -> void:
+	mouse_look_locked = not mouse_look_locked
+	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED if mouse_look_locked else Input.MOUSE_MODE_VISIBLE)
+	dragging = false
 
 
 func refresh_tool_options() -> void:
@@ -488,24 +511,23 @@ func refresh_tool_options() -> void:
 func update_camera() -> void:
 	if not is_instance_valid(camera):
 		return
-	var side := cos(camera_pitch) * camera_distance
-	camera.position = camera_target + Vector3(sin(camera_yaw)*side,sin(camera_pitch)*camera_distance,cos(camera_yaw)*side)
-	camera.look_at(camera_target,Vector3.UP)
+	camera.position = player_position
+	camera.rotation = Vector3(camera_pitch,camera_yaw,0)
 
 
 func move_camera(x: float, z: float) -> void:
 	var forward := Vector3(-sin(camera_yaw),0,-cos(camera_yaw))
 	var right := Vector3(cos(camera_yaw),0,-sin(camera_yaw))
-	camera_target += right*x + forward*z
-	camera_target.x = clampf(camera_target.x,-5,settings.width+5)
-	camera_target.z = clampf(camera_target.z,-5,settings.depth+5)
+	player_position += right*x + forward*z
+	player_position.x = clampf(player_position.x,0.45,settings.width-0.45)
+	player_position.z = clampf(player_position.z,0.45,settings.depth-0.45)
 	update_camera()
 
 
 func _process(delta: float) -> void:
 	if not live:
 		return
-	var movement := Vector2.ZERO
+	var movement := touch_movement
 	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP): movement.y -= 1
 	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN): movement.y += 1
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT): movement.x -= 1
@@ -513,11 +535,19 @@ func _process(delta: float) -> void:
 	if movement.length() > 0:
 		var forward := Vector3(-sin(camera_yaw),0,-cos(camera_yaw))
 		var right := Vector3(cos(camera_yaw),0,-sin(camera_yaw))
-		camera_target += (right*movement.x-forward*movement.y)*delta*7.0
-		camera_target.x = clampf(camera_target.x,-5,settings.width+5)
-		camera_target.z = clampf(camera_target.z,-5,settings.depth+5)
+		player_position += (right*movement.x-forward*movement.y).normalized()*delta*walk_speed
+		player_position.x = clampf(player_position.x,0.45,settings.width-0.45)
+		player_position.z = clampf(player_position.z,0.45,settings.depth-0.45)
 		update_camera()
 	update_preview()
+
+
+func _input(event: InputEvent) -> void:
+	# Handle this before the UI consumes Tab for focus navigation.
+	if live and event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_TAB or (event.keycode == KEY_ESCAPE and mouse_look_locked):
+			toggle_mouse_look()
+			get_viewport().set_input_as_handled()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -527,20 +557,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			dragging = event.pressed
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			camera_distance = maxf(5,camera_distance-1.2)
-			update_camera()
+			walk_speed = minf(10,walk_speed+0.5)
 		elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			camera_distance = minf(65,camera_distance+1.2)
-			update_camera()
+			walk_speed = maxf(1,walk_speed-0.5)
 		elif event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			place_aimed()
-	elif event is InputEventMouseMotion and dragging:
+	elif event is InputEventMouseMotion and (dragging or mouse_look_locked):
 		camera_yaw -= event.relative.x*0.007
-		camera_pitch = clampf(camera_pitch+event.relative.y*0.006,0.25,1.45)
+		camera_pitch = clampf(camera_pitch-event.relative.y*0.006,-1.45,1.45)
 		update_camera()
 	elif event is InputEventScreenDrag:
 		camera_yaw -= event.relative.x*0.006
-		camera_pitch = clampf(camera_pitch+event.relative.y*0.006,0.25,1.45)
+		camera_pitch = clampf(camera_pitch-event.relative.y*0.006,-1.45,1.45)
 		update_camera()
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_R:
