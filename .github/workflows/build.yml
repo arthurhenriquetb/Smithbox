@@ -70,3 +70,36 @@ jobs:
         with:
           name: CasaLivre-Android
           path: build/android/*.apk
+
+  preview_release:
+    name: Publish first downloadable preview
+    needs: [windows, android]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: CasaLivre-Android
+          path: dist/android
+      - uses: actions/download-artifact@v4
+        with:
+          name: CasaLivre-Windows
+          path: dist/windows
+      - name: Package Windows program
+        run: |
+          cd dist/windows
+          zip -9 ../CasaLivre-Windows.zip ./*
+      - name: Publish version 0.1 if not already present
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v0.1.0 >/dev/null 2>&1; then
+            echo 'Version 0.1 is already published.'
+          else
+            gh release create v0.1.0 dist/android/CasaLivre-debug.apk dist/CasaLivre-Windows.zip \
+              --title 'Casa Livre 0.1 — experimental preview' \
+              --notes 'First playable low-poly house planner for Android and Windows. Experimental debug-signed APK; intended for testing, not production. On Android you may need to allow installation from this source.' \
+              --prerelease
+          fi
